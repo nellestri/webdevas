@@ -1,7 +1,7 @@
 @extends('base')
 @section('title', 'Welcome Page')
 @section('content')
-<div>
+<div class="container">
     @if(session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
             {{ session('success') }}
@@ -21,6 +21,13 @@
         Add New Student
     </button>
 
+    <!-- Loading Spinner (optional) -->
+    <div id="loadingSpinner" class="d-none text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
     <!-- Displaying students -->
     <table class="table">
         <thead>
@@ -29,16 +36,58 @@
                 <th scope="col">Name</th>
                 <th scope="col">Age</th>
                 <th scope="col">Gender</th>
+                <th scope="col">Actions</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="studentsTable">
             @foreach($students as $student)
             <tr>
                 <th scope="row">{{ $loop->iteration }}</th>
                 <td>{{ $student->name }}</td>
                 <td>{{ $student->age }}</td>
                 <td>{{ $student->gender }}</td>
+                <td>
+                    <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editModal{{ $student->id }}">Edit</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteStudent({{ $student->id }})">Delete</button>
+                </td>
             </tr>
+
+            <!-- Edit Modal -->
+            <div class="modal fade" id="editModal{{ $student->id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Edit Student</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="editStudentForm{{ $student->id }}" method="POST" action="{{ route('std.updateStudent', $student->id) }}">
+                                @csrf
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Name</label>
+                                    <input type="text" class="form-control" name="name" value="{{ $student->name }}" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="age" class="form-label">Age</label>
+                                    <input type="number" class="form-control" name="age" value="{{ $student->age }}" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="gender" class="form-label">Gender</label>
+                                    <select class="form-select" name="gender" required>
+                                        <option value="Male" {{ $student->gender == 'Male' ? 'selected' : '' }}>Male</option>
+                                        <option value="Female" {{ $student->gender == 'Female' ? 'selected' : '' }}>Female</option>
+                                        <option value="Other" {{ $student->gender == 'Other' ? 'selected' : '' }}>Other</option>
+                                    </select>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                    <button type="submit" class="btn btn-primary">Update</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
             @endforeach
         </tbody>
     </table>
@@ -56,36 +105,24 @@
                         @csrf
                         <div class="mb-3">
                             <label for="name" class="form-label">Name</label>
-                            <input type="text" class="form-control @error('name') is-invalid @enderror"
-                                   id="name" name="name" value="{{ old('name') }}" required>
-                            @error('name')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                            <input type="text" class="form-control" name="name" required>
                         </div>
                         <div class="mb-3">
                             <label for="age" class="form-label">Age</label>
-                            <input type="number" class="form-control @error('age') is-invalid @enderror"
-                                   id="age" name="age" value="{{ old('age') }}" required>
-                            @error('age')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                            <input type="number" class="form-control" name="age" required>
                         </div>
                         <div class="mb-3">
                             <label for="gender" class="form-label">Gender</label>
-                            <select class="form-select @error('gender') is-invalid @enderror"
-                                    id="gender" name="gender" required>
+                            <select class="form-select" name="gender" required>
                                 <option value="">Select gender</option>
-                                <option value="Male" {{ old('gender') == 'Male' ? 'selected' : '' }}>Male</option>
-                                <option value="Female" {{ old('gender') == 'Female' ? 'selected' : '' }}>Female</option>
-                                <option value="Other" {{ old('gender') == 'Other' ? 'selected' : '' }}>Other</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
                             </select>
-                            @error('gender')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                            <button type="submit" class="btn btn-primary" id="submitBtn">Save Student</button>
+                            <button type="submit" class="btn btn-primary">Save Student</button>
                         </div>
                     </form>
                 </div>
@@ -96,79 +133,26 @@
 
 @push('scripts')
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('addStudentForm');
-    const modal = document.getElementById('addNewModal');
-    const bsModal = new bootstrap.Modal(modal);
-
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const submitBtn = this.querySelector('#submitBtn');
-        const formData = new FormData(this);
-
-        // Disable submit button
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
-
-        // Get CSRF token
-        const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-        // Submit form
-        fetch(this.action, {
-            method: 'POST',
-            body: formData,
+function deleteStudent(id) {
+    if (confirm('Are you sure you want to delete this student?')) {
+        fetch(`/students/delete/${id}`, {
+            method: 'DELETE',
             headers: {
-                'X-CSRF-TOKEN': token,
-                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'X-Requested-With': 'XMLHttpRequest'
-            },
-            credentials: 'same-origin'
+            }
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Hide modal
-                bsModal.hide();
-
-                // Show success message
-                const alertDiv = document.createElement('div');
-                alertDiv.className = 'alert alert-success alert-dismissible fade show';
-                alertDiv.innerHTML = `
-                    ${data.message}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                `;
-                document.querySelector('.container').insertBefore(alertDiv, document.querySelector('.container').firstChild);
-
-                // Reload page after short delay
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
+                location.reload();
+            } else {
+                alert(data.message);
             }
         })
-        .catch(error => {
-            // Show error message
-            const alertDiv = document.createElement('div');
-            alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-            alertDiv.innerHTML = `
-                Failed to add student. Please try again.
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            `;
-            document.querySelector('.container').insertBefore(alertDiv, document.querySelector('.container').firstChild);
-        })
-        .finally(() => {
-            // Re-enable submit button
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = 'Save Student';
-        });
-    });
-
-    // Reset form when modal is closed
-    modal.addEventListener('hidden.bs.modal', function () {
-        form.reset();
-        // Remove validation classes
-        form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-    });
-});
+        .catch(error => console.error('Error:', error));
+    }
+}
 </script>
 @endpush
 @endsection
