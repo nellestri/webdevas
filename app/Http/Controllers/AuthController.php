@@ -28,6 +28,7 @@ class AuthController extends Controller
         ]);
     }
 
+
     public function showRegisterForm()
     {
         return view('register');
@@ -47,8 +48,14 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        Auth::login($user);
+        return redirect()->route('login')->with('success', 'Registration successful. Please login.');
+    }
 
-        return redirect()->intended('dashboard');
+    public function logout(Request $request)
+    {
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        return redirect()->route('login');
     }
 }

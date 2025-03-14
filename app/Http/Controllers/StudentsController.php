@@ -4,14 +4,17 @@ namespace App\Http\Controllers;
 use App\Models\Students;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+
 class StudentsController extends Controller
 {
+    // Fetch and display students
     public function myView()
     {
         $students = Students::orderBy('created_at', 'desc')->get();
         return view('welcome', compact('students'));
     }
 
+    // Add new student
     public function addNewStudent(Request $request)
     {
         try {
@@ -32,6 +35,8 @@ class StudentsController extends Controller
 
             return redirect()->route('std.myView')->with('success', 'Student added successfully');
         } catch (\Exception $e) {
+            Log::error('Error adding student: ' . $e->getMessage());
+
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,
@@ -44,15 +49,30 @@ class StudentsController extends Controller
         }
     }
 
-public function updateStudent(Request $request, $id)
+    // Update student
+    public function updateStudent(Request $request, $id)
     {
-        $student = Students::findOrFail($id); // Fetch the student or throw 404
-        $student->update($request->all()); // Update the student with request data
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'age' => 'required|numeric|min:1|max:150',
+                'gender' => 'required|string|in:Male,Female,Other',
+            ]);
 
-        return redirect()->route('std.myView')->with('success', 'Student updated successfully!'); // Redirect back with success message
+            $student = Students::findOrFail($id);
+            $student->update($validated);
+
+            return redirect()->route('std.myView')->with('success', 'Student updated successfully!');
+        } catch (\Exception $e) {
+            Log::error('Error updating student: ' . $e->getMessage());
+
+            return back()->with('error', 'Failed to update student. Please try again.')
+                         ->withInput();
+        }
     }
 
-    public function deleteStudent($id)//+
+    // Delete student
+    public function deleteStudent($id)
     {
         try {
             $student = Students::findOrFail($id);
@@ -67,9 +87,7 @@ public function updateStudent(Request $request, $id)
 
             return redirect()->route('std.myView')->with('success', 'Student deleted successfully!');
         } catch (\Exception $e) {
-            // Log the error for debugging
-            Log::error('Error deleting student: ' . $e->getMessage());//-
-            Log::error('Error deleting student: ' . $e->getMessage());//+
+            Log::error('Error deleting student: ' . $e->getMessage());
 
             if (request()->ajax()) {
                 return response()->json([
@@ -78,7 +96,6 @@ public function updateStudent(Request $request, $id)
                 ], 422);
             }
 
-            // Return a more informative error message to the user
             return back()->with('error', 'Failed to delete student. Please check the ID or contact support.');
         }
     }
